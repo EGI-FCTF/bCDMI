@@ -3,20 +3,20 @@ bCDMI
 Simple Bash client for basic CDMI storage operations.
 
 The script support different authentication methods:
- * basic             HTTP basic authentication  (username/password)
- * token             HTTP token authentication
- * keystone-basic    Keystone auth token (with username/password authentication)
- * keystone-voms     Keystone auth toke (with VOMS-enabled certificates)
+ * basic             - HTTP basic authentication  (username/password)
+ * token             - HTTP token authentication
+ * keystone-basic    - Keystone auth token (with username/password authentication)
+ * keystone-voms     - Keystone auth toke (with VOMS-enabled certificates)
 
 and the following CDMI operations:
- * auth        Display auth information (for integration with other services)
- * list        List contents of the container [default action]
- * stat        Get info for the file (as CDMI metadata)
- * get         Download file
- * put         Upload a file (needs -T switch in the arguments)
- * post        Update metadata (ex. file ACL, see post command options for the full metadata list)
- * delete      Delete a file (or container)
- * mkdir       Create folder
+ * auth        - Display auth information (for integration with other services)
+ * list        - List contents of the container [default action]
+ * stat        - Get info for the file (as CDMI metadata)
+ * get         - Download file
+ * put         - Upload a file (needs -T switch in the arguments)
+ * post        - Update metadata (ex. file ACL, see post command options for the full metadata list)
+ * delete      - Delete a file (or container)
+ * mkdir       - Create folder
 
 Requirements
 =====
