@@ -32,6 +32,7 @@ Prior using the software, you need to configure the authorization file (default 
 
 Usage
 =====
+``` 
  ./bcdmi -e <endpoint> <action> [options]
 
 <endpoint> is the endpoint of the CDMI service.
@@ -64,4 +65,4 @@ post command:
   -m <metadata>             Add metadata features. Metadata format is pipe separated <name>=<value> . Allowed metadata is
     readacl                   Read permission for containers. Allowed values are '.r:*' or '.'
     weblist                   Listing of container contents in web format. Allowed values are 'true' or 'false'
-
+```
