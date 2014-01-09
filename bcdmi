@@ -236,16 +236,20 @@ if [[ "$_ACTION" == "auth" ]]; then
   #Only display auth information (and tenants list)
   echo "Auth type: $AUTH_TYPE"
   echo "User auth header: ${AUTH#-H }"
-  [[ -n "$AUTH_KEYSTONE_TENANT" ]] && echo "Tenant associated: $AUTH_KEYSTONE_TENANT" || echo "Tenant associated: (none)"
-  echo "Tenants list:"
-  
-  if [[ -z "$_ENDPOINT" ]]; then
-    echo "tenant name,tenant id,tenant description"
-    curl -s -S -k "$AUTH_KEYSTONE_URI/v2.0/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk 'BEGIN{RS="\""}{if($0=="name"){getline;getline;tmn=$0;}if($0=="id"){getline;getline;tmid=$0;}if($0=="description"){getline;getline;tmd=$0;}if((tmn!="")&&(tmid!="")&&(tmd!="")){print tmn","tmid","tmd;tmn="";tmid="";tmd=""}}'
-  else
-    _ENDPOINT="${_ENDPOINT/AUTH_*}"; _ENDPOINT="${_ENDPOINT%/}"
-    echo "tenant name,tenant id,tenant endpoint,tenant description"
-    curl -s -S -k "$AUTH_KEYSTONE_URI/v2.0/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk -v BE="$_ENDPOINT" 'BEGIN{RS="\""}{if($0=="name"){getline;getline;tmn=$0;}if($0=="id"){getline;getline;tmid=$0;}if($0=="description"){getline;getline;tmd=$0;}if((tmn!="")&&(tmid!="")&&(tmd!="")){print tmn","tmid","BE"/AUTH_"tmid"/,"tmd;tmn="";tmid="";tmd=""}}'
+  if [[ "$AUTH_TYPE" == "keystone-voms" || "$AUTH_TYPE" == "keystone-basic" ]]; then
+    [[ -n "$AUTH_KEYSTONE_URI" ]] && echo "Keystone URI: $AUTH_KEYSTONE_URI" || echo "Keystone URI: (none)"
+    [[ -n "$AUTH_KEYSTONE_TENANT" ]] && echo "Tenant associated: $AUTH_KEYSTONE_TENANT" || echo "Tenant associated: (none)"
+    if [[ -n "$AUTH_KEYSTONE_URI" ]]; then
+      echo "Tenants list:"
+      if [[ -z "$_ENDPOINT" ]]; then
+        echo "tenant name,tenant id,tenant description"
+        curl -s -S -k "$AUTH_KEYSTONE_URI/v2.0/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk 'BEGIN{RS="\""}{if($0=="name"){getline;getline;tmn=$0;}if($0=="id"){getline;getline;tmid=$0;}if($0=="description"){getline;getline;tmd=$0;}if((tmn!="")&&(tmid!="")&&(tmd!="")){print tmn","tmid","tmd;tmn="";tmid="";tmd=""}}'
+      else
+        _ENDPOINT="${_ENDPOINT/AUTH_*}"; _ENDPOINT="${_ENDPOINT%/}"
+        echo "tenant name,tenant id,tenant endpoint,tenant description"
+        curl -s -S -k "$AUTH_KEYSTONE_URI/v2.0/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk -v BE="$_ENDPOINT" 'BEGIN{RS="\""}{if($0=="name"){getline;getline;tmn=$0;}if($0=="id"){getline;getline;tmid=$0;}if($0=="description"){getline;getline;tmd=$0;}if((tmn!="")&&(tmid!="")&&(tmd!="")){print tmn","tmid","BE"/AUTH_"tmid"/,"tmd;tmn="";tmid="";tmd=""}}'
+      fi
+    fi
   fi
 elif [[ -z "$_ACTION" || "$_ACTION" == "list" ]]; then
   #List contents of the container
