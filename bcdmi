@@ -1,0 +1,301 @@
+#!/bin/bash
+#CDMI Tools by Salvatore Pinto - 10.10.2013
+
+function usage {
+  echo "Usage:
+ $0 -e <endpoint> <action> [options]
+
+<endpoint> is the endpoint of the CDMI service.
+
+<action> is the action to be performed on the storage. Possible actions are:
+  auth        Display auth information (for integration with other services)
+  list        List contents of the container [default action]
+  stat        Get info for the file (as CDMI metadata)
+  get         Download file
+  put         Upload a file (needs -T switch in the arguments)
+  post        Update metadata (see post command options for the metadata list)
+  delete      Delete a file (or container)
+  mkdir       Create folder
+
+Generic options:
+  -o | --output <file>      Redirect output to file <file>
+  --auth-file <file>        Local authorization file. Default authorization file is $_LOCAL_AUTH .
+                            This file cointains the service authorization data. See sample authorization file for more info
+  -a | --auth               Override authorization data (format shall be understandable by cURL command line).
+  --cdmi-version <version>  Version of the CDMI standard to use (default $_CDMI_VERSION)
+  --crl-update              Update CRL before creating a new proxy. Recommended if fetch-crl is not enabled in the cron (ex. on Windows machines)
+
+put command:
+ -T | --upload-file <file>  File to upload [mandatory]
+
+delete command:
+  -r                        Enable recursive directory deletion
+
+post command:
+  -m <metadata>             Add metadata features. Metadata format is pipe separated <name>=<value> . Allowed metadata is
+    readacl                   Read permission for containers. Allowed values are '.r:*' or '.'
+    weblist                   Listing of container contents in web format. Allowed values are 'true' or 'false'
+"
+  exit 1
+}
+
+function error {
+  ec="$1"
+  dsc="$2"
+  if [[ -z "$dsc" ]]; then
+    dsc="$ec"
+    ec=255
+  fi
+  [[ -z "$dsc" ]] && dsc="Unknow Error!!!"
+  echo "ERROR: $dsc" 1>&2
+  exit $ec
+}
+
+#Default arguments
+_DEBUG=false
+_ENDPOINT=
+_AUTH=
+_LOCAL_AUTH=$0.auth
+_ACTION=
+_POST_META=
+_CDMI_VERSION=1.0.1
+_FILE_TO_UPLOAD=
+_FILE_OUTPUT=
+_RECURSIVE=false
+_CRL_UPDATE=false
+
+#Parse arguments
+[[ -z "$1" ]] && usage
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+   -d | --debug) _DEBUG=true; shift 1 ;;
+   -a | --auth) _AUTH="$2"; shift 2 ;;
+   -A | --auth-file) _LOCAL_AUTH="$2"; shift 2 ;;
+   -e | --endpoint) _ENDPOINT="$2"; shift 2 ;;
+   --cdmi-version) _CDMI_VERSION="$2"; shift 2 ;;
+   -T | --upload-file) _FILE_TO_UPLOAD="$2"; shift 2 ;;
+   -o | --output) _FILE_OUTPUT="$2"; shift 2 ;;
+   -a | --action) _ACTION="$2"; shift 2 ;;
+   -r) _RECURSIVE=true; shift 1 ;;
+   -m) _POST_META="$2"; shift 2 ;;
+   --crl-update) _CRL_UPDATE=true; shift 1 ;;
+   -h | --help) usage ;;
+   *)
+     if [[ -z "$_ACTION" ]]; then
+       _ACTION="$1"; shift 1;
+     else
+       if [[ -n "$_ENDPOINT" ]]; then
+         _ENDPOINT="${_ENDPOINT%/}/$1"; shift 1;
+       else
+         error 2 "Unknown option: $1"
+       fi
+     fi
+    ;;
+  esac
+done
+
+#Redirect output to a file if required
+if [[ -n "$_FILE_OUTPUT" ]]; then
+  exec 1>$_FILE_OUTPUT
+fi
+
+#If prensent, load authorization file
+if [[ -n "$_LOCAL_AUTH" && -e "$_LOCAL_AUTH" ]]; then
+  $_DEBUG && echo "[DEBUG] Loading authorization file" >&2
+  source "$_LOCAL_AUTH"
+fi
+
+#Authorization
+$_DEBUG && echo "[DEBUG] Initializing authorization" >&2
+if [[ "$AUTH_TYPE" == "basic" ]]; then
+  #HTTP basic authentication
+  $_DEBUG && echo "[DEBUG] using HTTP basic authentication: $AUTH_USERNAME / ***********" >&2
+  AUTH="Authorization: Basic `echo -n "$AUTH_USERNAME:$AUTH_PASSWORD" | base64`"
+elif [[ "$AUTH_TYPE" == "token" ]]; then
+  #HTTP token authentication
+  $_DEBUG && echo "[DEBUG] using HTTP token authentication: $AUTH_TOKEN" >&2
+  AUTH="X-Auth-Token: $AUTH_TOKEN"
+elif [[ "$AUTH_TYPE" == "keystone-basic" ]]; then
+  #Keystone authentication (with username/password)
+  $_DEBUG && echo "[DEBUG] using keystone (username/password) authentication" >&2
+  if [[ -n "$AUTH_TOKEN_EXPIRE_TIME" && `date +%s` -lt `date -d "$AUTH_TOKEN_EXPIRE_TIME" +%s` ]]; then
+    #Token is still valid, just use it
+    $_DEBUG && echo "[DEBUG] valid token found ( $AUTH_TOKEN ). using it." >&2
+    AUTH="X-Auth-Token: $AUTH_TOKEN"
+  else
+    #Token is not valid anymore, re-generate it
+    $_DEBUG && echo "[DEBUG] no valid token found, creating a new one." >&2
+    error 127 "Not jet implemented"
+  fi
+elif [[ "$AUTH_TYPE" == "keystone-voms" ]]; then
+  #Keystone authentication (with VOMS proxy certificate)
+  $_DEBUG && echo "[DEBUG] using keystone (VOMS) authentication" >&2
+
+  #Set CA PATH
+  [[ -z "$AUTH_KEYSTONE_CAPATH" ]] && AUTH_KEYSTONE_CAPATH=/etc/grid-security/certificates
+
+  #Get token
+  if [[ -n "$AUTH_TOKEN_EXPIRE_TIME" && `date +%s` -lt `date -d "$AUTH_TOKEN_EXPIRE_TIME" +%s` ]]; then
+    #Token is still valid, just use it
+    $_DEBUG && echo "[DEBUG] valid token found ( $AUTH_TOKEN ). using it." >&2
+    AUTH="X-Auth-Token: $AUTH_TOKEN"
+  else
+    #Token is not valid anymore, re-generate it
+    $_DEBUG && echo "[DEBUG] no valid token found, creating a new one." >&2
+    if [[ -n "$AUTH_KEYSTONE_PROXY" ]]; then
+       $_DEBUG && echo "[DEBUG] checking proxy validity." >&2
+      #Check proxy certificate validity
+      voms-proxy-info -file "$AUTH_KEYSTONE_PROXY" -exists
+      [[ $? -ne 0 ]] && error 192 "Specified proxy certificate is not valid anymore. Please generate a new proxy or specify the user certificate."
+    elif [[ -n "$AUTH_KEYSTONE_CERT" && -n "$AUTH_KEYSTONE_KEY" && -n "$AUTH_KEYSTONE_VOMSEXT" ]]; then
+      $_DEBUG && echo "[DEBUG] generating temporary proxy." >&2
+      AUTH_KEYSTONE_PROXY="$0.tempproxy"
+
+      if $_CRL_UPDATE; then
+        #Run fetch-crl
+	$_DEBUG && echo "[DEBUG] Updating CRLs..." >&2
+	fetch-crl &>/dev/null
+      fi
+	  
+      #Generate a proxy from the certificate
+      voms-proxy-init -cert "$AUTH_KEYSTONE_CERT" -key "$AUTH_KEYSTONE_KEY" -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY" -rfc -dont-verify-ac &>/dev/null
+      if [[ $? -ne 0 ]]; then
+	    #Even if voms-proxy-init returned an error, it may have generated a valid proxy (this is due to a bug in voms-proxy-init)
+		voms-proxy-info -file "$AUTH_KEYSTONE_PROXY" -exists
+		if [[ $? -ne 0 ]]; then
+		  rm -f "$AUTH_KEYSTONE_PROXY"
+	      error 192 "Failed to generate temporary user proxy."
+		fi
+	  fi
+    else
+      error 193 "No authorization proxy specified. Please define one or a client certificate"
+    fi
+
+    #Get Keystone URI
+    AUTH_KEYSTONE_URI="${AUTH_KEYSTONE_URI%/}"
+    if [[ -z "$AUTH_KEYSTONE_URI" ]]; then
+      #Try to get the keystone url from the endpoint
+      AUTH_KEYSTONE_URI=`curl -k -v "${_ENDPOINT/AUTH_*}" 2>&1 | sed -n "s|< www-authenticate *: *Keystone uri *= *[\"\\\']*\([^\"\\\']*\).*$|\1|Ip"`
+      [[ -z "$AUTH_KEYSTONE_URI" ]] && error 197 "Impossible to get Keystone URI. Please specify a custom one in the autorization file."
+    fi
+
+    #Get tenant
+    if [[ -z "$AUTH_KEYSTONE_TENANT" ]]; then
+      #Tenant name if not specified, get tenants list
+      $_DEBUG && echo "[DEBUG] tenant name not specified. getting unscoped token" >&2
+      TMPSTR="`curl -s -S -X POST "$AUTH_KEYSTONE_URI/v2.0/tokens" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"auth":{"voms":true}}' --cert "$AUTH_KEYSTONE_PROXY" --key "$AUTH_KEYSTONE_PROXY" --cacert "$AUTH_KEYSTONE_PROXY" --capath "$AUTH_KEYSTONE_CAPATH" | gawk 'BEGIN{RS="\\""}{if ($0=="expires") {getline;getline;gsub("T"," ",$0);gsub("Z","",$0);printf $0","}if($0=="id"){getline;getline;printf $0;exit}}'`"
+      AUTH_TOKEN_EXPIRE_TIME="${TMPSTR%,*}"
+      AUTH_TOKEN="${TMPSTR#*,}"
+      [[ -z "$AUTH_TOKEN" ]] && error 201 "failed to get unscoped token"
+      AUTH="X-Auth-Token: $AUTH_TOKEN"
+
+      #get default tenant name
+      AUTH_KEYSTONE_TENANT=`curl -s -S -k "$AUTH_KEYSTONE_URI/v2.0/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk 'BEGIN{RS="\""}{if($0=="name"){getline;getline;printf $0","}}'`
+      AUTH_KEYSTONE_TENANT=${AUTH_KEYSTONE_TENANT%,}
+      if [[ "${AUTH_KEYSTONE_TENANT//,/}" != "$AUTH_KEYSTONE_TENANT" ]]; then
+        #user belongs to more than one tenant
+        if [[ "$_ACTION" == "auth" ]]; then
+          AUTH_KEYSTONE_TENANT=
+        else
+          error 203 "User belong to more than one tenant. You need to specify one in the authorization file. Possible tenants are: $AUTH_KEYSTONE_TENANT . Use auth to get the details of the allowed tenants."
+        fi
+      else
+        #user belong to only one tenant, using it as default
+        $_DEBUG && echo "[DEBUG] Got default tenant: $AUTH_KEYSTONE_TENANT" >&2
+      fi
+    fi
+
+    if [[ -z "$AUTH_KEYSTONE_TENANT" ]]; then
+      echo "WARNING: Failed to get a default tenant. You need to specify one in the authorization file. The list of allowed tenants is provided via the auth command."
+    else
+      #Request scoped token
+      TMPSTR="`curl -s -S -X POST "$AUTH_KEYSTONE_URI/v2.0/tokens" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"auth":{"voms":true,"tenantName":"'"$AUTH_KEYSTONE_TENANT"'"}}' --cert "$AUTH_KEYSTONE_PROXY" --key $AUTH_KEYSTONE_PROXY --cacert "$AUTH_KEYSTONE_PROXY" --capath "$AUTH_KEYSTONE_CAPATH" | gawk 'BEGIN{RS="\\""}{if ($0=="expires") {getline;getline;gsub("T"," ",$0);gsub("Z","",$0);printf $0","}if($0=="id"){getline;getline;printf $0;exit}}'`"
+      AUTH_TOKEN_EXPIRE_TIME="${TMPSTR%,*}"
+      AUTH_TOKEN="${TMPSTR#*,}"
+      [[ -z "$AUTH_TOKEN" ]] && error 202 "failed to get scoped token for tenant $AUTH_KEYSTONE_TENANT"
+      $_DEBUG && echo "[DEBUG] got scoped token $AUTH_TOKEN (expire on $AUTH_TOKEN_EXPIRE_TIME)." >&2
+      AUTH="X-Auth-Token: $AUTH_TOKEN"
+ 
+      #Save skoped token
+      $_DEBUG && echo "[DEBUG] saving authorization token." >&2
+      sed -i -e '$a AUTH_TOKEN_EXPIRE_TIME="'"$AUTH_TOKEN_EXPIRE_TIME"'"' -e '$a AUTH_TOKEN="'"$AUTH_TOKEN"'"' -e '/^AUTH_TOKEN_EXPIRE_TIME=/d' -e '/^AUTH_TOKEN=/d' $_LOCAL_AUTH
+
+      #If the proxy is temporary, delete it
+      [[ "$AUTH_KEYSTONE_PROXY" == "$0.tempproxy" ]] && rm -f "$0.tempproxy"
+    fi
+  fi
+elif [[ -n "$_AUTH" ]]; then
+  $_DEBUG && echo "[DEBUG] Manual authorization string specified. Using it." >&2
+  AUTH="$_AUTH"
+else
+  error 242 "No authorization method specified. Please setup a local authorization file."
+fi
+
+$_DEBUG && echo "[DEBUG] Performing query $_ACTION..." >&2
+if [[ "$_ACTION" == "auth" ]]; then
+  #Only display auth information (and tenants list)
+  echo "Auth type: $AUTH_TYPE"
+  echo "User auth header: ${AUTH#-H }"
+  [[ -n "$AUTH_KEYSTONE_TENANT" ]] && echo "Tenant associated: $AUTH_KEYSTONE_TENANT" || echo "Tenant associated: (none)"
+  echo "Tenants list:"
+  
+  if [[ -z "$_ENDPOINT" ]]; then
+    echo "tenant name,tenant id,tenant description"
+    curl -s -S -k "$AUTH_KEYSTONE_URI/v2.0/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk 'BEGIN{RS="\""}{if($0=="name"){getline;getline;tmn=$0;}if($0=="id"){getline;getline;tmid=$0;}if($0=="description"){getline;getline;tmd=$0;}if((tmn!="")&&(tmid!="")&&(tmd!="")){print tmn","tmid","tmd;tmn="";tmid="";tmd=""}}'
+  else
+    _ENDPOINT="${_ENDPOINT/AUTH_*}"; _ENDPOINT="${_ENDPOINT%/}"
+    echo "tenant name,tenant id,tenant endpoint,tenant description"
+    curl -s -S -k "$AUTH_KEYSTONE_URI/v2.0/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk -v BE="$_ENDPOINT" 'BEGIN{RS="\""}{if($0=="name"){getline;getline;tmn=$0;}if($0=="id"){getline;getline;tmid=$0;}if($0=="description"){getline;getline;tmd=$0;}if((tmn!="")&&(tmid!="")&&(tmd!="")){print tmn","tmid","BE"/AUTH_"tmid"/,"tmd;tmn="";tmid="";tmd=""}}'
+  fi
+elif [[ -z "$_ACTION" || "$_ACTION" == "list" ]]; then
+  #List contents of the container
+  curl -k -s -S "$_ENDPOINT" -H "$AUTH" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" | gawk 'BEGIN{RS="\""}{if($0=="children"){while($0!~"]|}"){getline;if($0~"]|}")break;getline;gsub(/ /,"%20",$0);print $0}}}'
+elif [[ "$_ACTION" == "get" ]]; then
+  #Get content of the file
+  curl -k -s -S "$_ENDPOINT" -H "$AUTH"
+elif [[ "$_ACTION" == "put" ]]; then
+  [[ -z "$_FILE_TO_UPLOAD" ]] && error 243 "You need to specify a file to upload."
+  curl -k "$_ENDPOINT" -H "$AUTH"  -H 'Content-Type: application/binary' -T "$_FILE_TO_UPLOAD"
+elif [[ "$_ACTION" == "stat" ]]; then
+  curl -k -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
+elif [[ "$_ACTION" == "delete" ]]; then
+  if $_RECURSIVE; then
+    if [[ "${_ENDPOINT%/}" == "$_ENDPOINT" ]]; then
+      #This is not a folder, delete the file
+      curl -k -s -S "$_ENDPOINT" -X DELETE -H "$AUTH"
+    else
+      #This is a folder, list the contents and delete all the contents recursively
+      for f in `curl -k -s -S "$_ENDPOINT" -H "$AUTH" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" | gawk 'BEGIN{RS="\""}{if($0=="children"){while($0!~"]|}"){getline;if($0~"]|}")break;getline;gsub(/ /,"%20",$0);print $0}}}'`; do
+        if [[ "${f%/}" == "$f" ]]; then
+          curl -k -s -S "$_ENDPOINT$f" -X DELETE -H "$AUTH"
+        else
+          $0 -r -e "$_ENDPOINT" delete $f
+        fi
+      done
+      #Then delete the folder itself
+      curl -k -s -S "$_ENDPOINT" -X DELETE -H "$AUTH"
+    fi
+  else
+    curl -k -s -S "$_ENDPOINT" -X DELETE -H "$AUTH"
+  fi
+elif [[ "$_ACTION" == "mkdir" ]]; then
+   curl -k -X PUT "${_ENDPOINT%/}/" -H "$AUTH" -H 'Content-Type: application/cdmi-container' -H 'Content-Length: 0'
+elif [[ "$_ACTION" == "post" ]]; then
+  #WARNING. This uses SWIFT API, because there is still no CDMI ACL implementation in SWIFT
+  _ENDPOINT="${_ENDPOINT/\/cdmi\///v1/}" #switch to SWIFT API
+  
+  for META in ${_POST_META//|/ }; do
+    META_CODE="${META%%=*}"
+    META_VALUE="${META#*=}"
+    case "$META_CODE" in
+      readacl) META_CODE="X-Container-Read" ;;
+      weblist) META_CODE="X-Container-Meta-Web-Listings" ;;
+      *) error 125 "Metadata code $META_CODE not valid"
+    esac
+    curl -k -s -S "$_ENDPOINT" -X POST -H "$AUTH" -H "$META_CODE: $META_VALUE" -H 'Accept-Encoding: identity'
+  done
+else
+  error 150 "Action $_ACTION is not recognized."
+fi
+
+exit 0
