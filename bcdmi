@@ -1,5 +1,5 @@
 #!/bin/bash
-#CDMI Tools by Salvatore Pinto - 10.10.2013
+#CDMI Tools (v0.2) by Salvatore Pinto - 04.06.2013
 
 function usage {
   echo "Usage:
@@ -142,33 +142,51 @@ elif [[ "$AUTH_TYPE" == "keystone-voms" ]]; then
   else
     #Token is not valid anymore, re-generate it
     $_DEBUG && echo "[DEBUG] no valid token found, creating a new one." >&2
+    
+    if $_CRL_UPDATE; then
+      #Run fetch-crl if specified, this is required for VOMS tools
+      $_DEBUG && echo "[DEBUG] Updating CRLs..." >&2
+      fetch-crl &>/dev/null
+    fi
+
+    #Get proxy credential, if any
     if [[ -n "$AUTH_KEYSTONE_PROXY" ]]; then
-       $_DEBUG && echo "[DEBUG] checking proxy validity." >&2
-      #Check proxy certificate validity
+      $_DEBUG && echo "[DEBUG] checking proxy validity." >&2
+      #Check proxy certificate validity and VO name
       voms-proxy-info -file "$AUTH_KEYSTONE_PROXY" -exists
       [[ $? -ne 0 ]] && error 192 "Specified proxy certificate is not valid anymore. Please generate a new proxy or specify the user certificate."
+      VONAME="`voms-proxy-info -file "$AUTH_KEYSTONE_PROXY" -all | gawk '{if($1=="VO")print $3}'`"
+      [[ $? -ne 0 ]] && error 192 "Specified proxy certificate is not valid anymore. Please generate a new proxy or specify the user certificate."
+
+      #Check the proxy VO extensions validity (if specified)
+      if [[ "$VONAME" != "$AUTH_KEYSTONE_VOMSEXT" ]]; then
+        #No valid VOMS extensions provided with the proxy, re-create a new proxy
+        $_DEBUG && echo "[DEBUG] No valid VOMS extensions provided in the proxy. Create a new temporary proxy for autentication." >&2
+
+        TMP_OPTS="-rfc -dont-verify-ac"
+        [[ -n "$X509_VOMSES" ]] && TMP_OPTS="$TMP_OPTS -vomses $X509_VOMSES"
+        voms-proxy-init -cert "$AUTH_KEYSTONE_PROXY" -key "$AUTH_KEYSTONE_PROXY" -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY.vomsext" $TMP_OPTS -debug #&>/dev/null 
+        if [[ $? -ne 0 ]]; then
+          rm -f "$AUTH_KEYSTONE_PROXY.vomsext"
+          error 192 "Failed to generate temporary user proxy."
+        fi
+        AUTH_KEYSTONE_PROXY=$AUTH_KEYSTONE_PROXY.vomsext
+      fi
     elif [[ -n "$AUTH_KEYSTONE_CERT" && -n "$AUTH_KEYSTONE_KEY" && -n "$AUTH_KEYSTONE_VOMSEXT" ]]; then
       $_DEBUG && echo "[DEBUG] generating temporary proxy." >&2
       AUTH_KEYSTONE_PROXY="$0.tempproxy"
 
-      if $_CRL_UPDATE; then
-        #Run fetch-crl
-	$_DEBUG && echo "[DEBUG] Updating CRLs..." >&2
-	fetch-crl &>/dev/null
-      fi
-	  
-      #Generate a proxy from the certificate
+      #Generate a proxy from the certificate (with VOMS extensions)
       voms-proxy-init -cert "$AUTH_KEYSTONE_CERT" -key "$AUTH_KEYSTONE_KEY" -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY" -rfc -dont-verify-ac &>/dev/null
       if [[ $? -ne 0 ]]; then
-	    #Even if voms-proxy-init returned an error, it may have generated a valid proxy (this is due to a bug in voms-proxy-init)
-		voms-proxy-info -file "$AUTH_KEYSTONE_PROXY" -exists
-		if [[ $? -ne 0 ]]; then
-		  rm -f "$AUTH_KEYSTONE_PROXY"
-	      error 192 "Failed to generate temporary user proxy."
-		fi
-	  fi
-    else
-      error 193 "No authorization proxy specified. Please define one or a client certificate"
+	voms-proxy-info -file "$AUTH_KEYSTONE_PROXY" -exists
+        if [[ $? -ne 0 ]]; then
+	  rm -f "$AUTH_KEYSTONE_PROXY"
+	  error 192 "Failed to generate temporary user proxy."
+	fi
+      else
+        error 193 "No authorization proxy specified. Please define one or a client certificate"
+      fi
     fi
 
     #Get Keystone URI

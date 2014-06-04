@@ -2,8 +2,9 @@
 # basic             HTTP basic authentication  (username/password)
 # token             HTTP token authentication
 # keystone-basic    Keystone auth token (with basic username/password authentication)
-# keystone-voms     Keystone auth toke (with VOMS-enabled certificates)
-AUTH_TYPE="keystone-voms"
+# keystone-voms     Keystone auth token (with VOMS-enabled certificates)
+# keystone-myproxy  Keystone auth token (with MyProxy-enabled credentials)
+AUTH_TYPE='keystone-voms'
 
 #basic auth
 #AUTH_USERNAME="mysusername"
@@ -16,13 +17,21 @@ AUTH_TYPE="keystone-voms"
 #AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
 #AUTH_USERNAME="mysusername"
 #AUTH_PASSWORD="mypassword"
-#AUTH_KEYSTONE_TENANT="mytenant"
+#AUTH_KEYSTONE_TENANT='mytenant'
 
 #keystone-voms auth
-#AUTH_KEYSTONE_URI="https://egi-cloud.zam.kfa-juelich.de:5000" #If not specified, Keystone URL is taken from the WWW-authenticate header of the 401 Unautorized server reply
-AUTH_KEYSTONE_CERT="$PWD/usercert.pem"
-AUTH_KEYSTONE_KEY="$PWD/userkey.pem"
+#AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
+#AUTH_KEYSTONE_CERT="$PWD/usercert.pem"
+#AUTH_KEYSTONE_KEY="$PWD/userkey.pem"
+#AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu"
+#AUTH_KEYSTONE_PROXY='/opt/osgc/dropbox/spkgs/bcdmi.auth.proxy'
+#AUTH_KEYSTONE_TENANT='mytenant'
+
+#keystone-myproxy auth
+AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
 AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu"
-#AUTH_KEYSTONE_PROXY=/tmp/x509up_u500 #proxy will override the certificate/key pairs
-#AUTH_KEYSTONE_TENANT="EGI_UC_PeachNote" #if not specidied, default tenant for the user will be mapped. To get a list of tenats assigned to the user, leave this field empty and call the bcdmi script with the auth command
+AUTH_KEYSTONE_TENANT='mytenant'
+AUTH_MYPROXY_URI='myproxy://myproxy.server'
+AUTH_USERNAME="mysusername"
+AUTH_PASSWORD="mypassword"
 
