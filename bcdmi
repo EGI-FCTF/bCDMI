@@ -34,6 +34,7 @@ delete command:
 post command:
   -m <metadata>             Add metadata features. Metadata format is pipe separated <name>=<value> . Allowed metadata is
     readacl                   Read permission for containers. Allowed values are '.r:*' or '.'
+    writeacl                  Write permission for containers. Allowed values are '.r:*' or '.'
     weblist                   Listing of container contents in web format. Allowed values are 'true' or 'false'
 "
   exit 1
@@ -311,6 +312,7 @@ elif [[ "$_ACTION" == "post" ]]; then
     META_VALUE="${META#*=}"
     case "$META_CODE" in
       readacl) META_CODE="X-Container-Read" ;;
+      writeacl) META_CODE="X-Container-Write" ;;
       weblist) META_CODE="X-Container-Meta-Web-Listings" ;;
       *) error 125 "Metadata code $META_CODE not valid"
     esac
