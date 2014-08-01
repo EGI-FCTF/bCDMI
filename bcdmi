@@ -188,13 +188,15 @@ elif [[ "$AUTH_TYPE" == "keystone-voms" ]]; then
       else
         error 193 "No authorization proxy specified. Please define one or a client certificate"
       fi
+    else
+      error 194 "Please setup a proxy or certificate for Keystone authentication and VOMS extension in the bcdmi.auth file"
     fi
 
     #Get Keystone URI
     AUTH_KEYSTONE_URI="${AUTH_KEYSTONE_URI%/}"
     if [[ -z "$AUTH_KEYSTONE_URI" ]]; then
       #Try to get the keystone url from the endpoint
-      AUTH_KEYSTONE_URI=`curl -k -v "${_ENDPOINT/AUTH_*}" 2>&1 | sed -n "s|< www-authenticate *: *Keystone uri *= *[\"\\\']*\([^\"\\\']*\).*$|\1|Ip"`
+      AUTH_KEYSTONE_URI=`curl -k -v -H "X-CDMI-Specification-Version: $_CDMI_VERSION" "${_ENDPOINT/AUTH_*}" 2>&1 | sed -n "s|< www-authenticate *: *Keystone uri *= *[\"\\\']*\([^\"\\\']*\).*$|\1|Ip"`
       [[ -z "$AUTH_KEYSTONE_URI" ]] && error 197 "Impossible to get Keystone URI. Please specify a custom one in the autorization file."
     fi
 
@@ -278,31 +280,31 @@ elif [[ "$_ACTION" == "get" ]]; then
   curl -k -s -S "$_ENDPOINT" -H "$AUTH"
 elif [[ "$_ACTION" == "put" ]]; then
   [[ -z "$_FILE_TO_UPLOAD" ]] && error 243 "You need to specify a file to upload."
-  curl -k "$_ENDPOINT" -H "$AUTH"  -H 'Content-Type: application/binary' -T "$_FILE_TO_UPLOAD"
+  curl -k "$_ENDPOINT" -H "$AUTH" -H 'Content-Type: application/binary' -T "$_FILE_TO_UPLOAD"
 elif [[ "$_ACTION" == "stat" ]]; then
   curl -k -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
 elif [[ "$_ACTION" == "delete" ]]; then
   if $_RECURSIVE; then
     if [[ "${_ENDPOINT%/}" == "$_ENDPOINT" ]]; then
       #This is not a folder, delete the file
-      curl -k -s -S "$_ENDPOINT" -X DELETE -H "$AUTH"
+      curl -k -s -S "$_ENDPOINT" -X DELETE -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
     else
       #This is a folder, list the contents and delete all the contents recursively
       for f in `curl -k -s -S "$_ENDPOINT" -H "$AUTH" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" | gawk 'BEGIN{RS="\""}{if($0=="children"){while($0!~"]|}"){getline;if($0~"]|}")break;getline;gsub(/ /,"%20",$0);print $0}}}'`; do
         if [[ "${f%/}" == "$f" ]]; then
-          curl -k -s -S "$_ENDPOINT$f" -X DELETE -H "$AUTH"
+          curl -k -s -S "$_ENDPOINT$f" -X DELETE -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
         else
           $0 -r -e "$_ENDPOINT" delete $f
         fi
       done
       #Then delete the folder itself
-      curl -k -s -S "$_ENDPOINT" -X DELETE -H "$AUTH"
+      curl -k -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -X DELETE -H "$AUTH"
     fi
   else
-    curl -k -s -S "$_ENDPOINT" -X DELETE -H "$AUTH"
+    curl -k -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -X DELETE -H "$AUTH"
   fi
 elif [[ "$_ACTION" == "mkdir" ]]; then
-   curl -k -X PUT "${_ENDPOINT%/}/" -H "$AUTH" -H 'Content-Type: application/cdmi-container' -H 'Content-Length: 0'
+   curl -k -X PUT "${_ENDPOINT%/}/" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH" -H 'Content-Type: application/cdmi-container' -H 'Content-Length: 0'
 elif [[ "$_ACTION" == "post" ]]; then
   #WARNING. This uses SWIFT API, because there is still no CDMI ACL implementation in SWIFT
   _ENDPOINT="${_ENDPOINT/\/cdmi\///v1/}" #switch to SWIFT API
