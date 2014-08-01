@@ -1,3 +1,11 @@
+Version 0.3:
+ * Automatic selection of correct tenant if user is registered to more than one VO
+ * Added automatic retreival of keystone endpoint for keystone-voms authorization driver
+ * Added automatic retreival of API endpoints from keystone (if specified)
+ * Added -k switch and set as default validating HTTPs certificates
+ * Separated retreived token and other cached information from main auth configuration file
+ * Minor bugfixes
+
 Version 0.2:
  * Added changelog
  * Added support for myproxy certificates and VOMS certificate registration

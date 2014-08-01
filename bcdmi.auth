@@ -21,17 +21,16 @@ AUTH_TYPE='keystone-voms'
 
 #keystone-voms auth
 #AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
-#AUTH_KEYSTONE_CERT="$PWD/usercert.pem"
-#AUTH_KEYSTONE_KEY="$PWD/userkey.pem"
-#AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu"
-#AUTH_KEYSTONE_PROXY='/opt/osgc/dropbox/spkgs/bcdmi.auth.proxy'
+AUTH_KEYSTONE_CERT="$HOME/.globus/usercert.pem"
+AUTH_KEYSTONE_KEY="$HOME/.globus/userkey.pem"
+AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu"
+#AUTH_KEYSTONE_PROXY='/tmp/x509up_u500'
 #AUTH_KEYSTONE_TENANT='mytenant'
 
 #keystone-myproxy auth
-AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
-AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu"
-AUTH_KEYSTONE_TENANT='mytenant'
-AUTH_MYPROXY_URI='myproxy://myproxy.server'
-AUTH_USERNAME="mysusername"
-AUTH_PASSWORD="mypassword"
-
+#AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
+#AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu"
+#AUTH_KEYSTONE_TENANT='mytenant'
+#AUTH_MYPROXY_URI='myproxy://myproxy.server'
+#AUTH_USERNAME="mysusername"
+#AUTH_PASSWORD="mypassword"
