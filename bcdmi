@@ -1,5 +1,5 @@
 #!/bin/bash
-#CDMI Tools (v0.2) by Salvatore Pinto - 04.06.2013
+#CDMI Tools (v0.3) by Salvatore Pinto - 04.08.2013
 
 function usage {
   echo "Usage:
