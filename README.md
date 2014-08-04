@@ -6,7 +6,8 @@ The script support different authentication methods:
  * basic             - HTTP basic authentication  (username/password)
  * token             - HTTP token authentication
  * keystone-basic    - Keystone auth token (with username/password authentication)
- * keystone-voms     - Keystone auth toke (with VOMS-enabled certificates)
+ * keystone-voms     - Keystone auth token (with VOMS-enabled certificates)
+ * keystone-myproxy  - Keystone auth token (with myproxy certificate retreival)
 
 and the following CDMI operations:
  * auth        - Display auth information (for integration with other services)
@@ -22,7 +23,8 @@ Requirements
 =====
 This script requires:
  * cURL
- * fetch-crl and voms-clients (For keystone-voms support)
+ * fetch-crl and voms-clients (For keystone-voms or keystone-myproxy support)
+ * myproxy clients (For keystone-myproxy support)
 
 To install the script, just copy it and the sample bcdmi.auth file into your home/bin folder.
 
@@ -33,6 +35,7 @@ Prior using the software, you need to configure the authorization file (default 
 Usage
 =====
 ``` 
+Usage:
  ./bcdmi -e <endpoint> <action> [options]
 
 <endpoint> is the endpoint of the CDMI service.
@@ -54,6 +57,8 @@ Generic options:
   -a | --auth               Override authorization data (format shall be understandable by cURL command line).
   --cdmi-version <version>  Version of the CDMI standard to use (default 1.0.1)
   --crl-update              Update CRL before creating a new proxy. Recommended if fetch-crl is not enabled in the cron (ex. on Windows machines)
+  --ca-path <path>          Use the following CA path for HTTPs certificates verification (default to /etc/grid-security/certificates if present)
+  -k | --insecure           Do not verify HTTPs certificate in the API calls (not recommended)
 
 put command:
  -T | --upload-file <file>  File to upload [mandatory]
@@ -64,5 +69,6 @@ delete command:
 post command:
   -m <metadata>             Add metadata features. Metadata format is pipe separated <name>=<value> . Allowed metadata is
     readacl                   Read permission for containers. Allowed values are '.r:*' or '.'
+    writeacl                  Write permission for containers. Allowed values are '.r:*' or '.'
     weblist                   Listing of container contents in web format. Allowed values are 'true' or 'false'
 ```

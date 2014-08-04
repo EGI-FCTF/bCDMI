@@ -6,31 +6,31 @@
 # keystone-myproxy  Keystone auth token (with MyProxy-enabled credentials)
 AUTH_TYPE='keystone-voms'
 
-#basic auth
+#basic authentication
 #AUTH_USERNAME="mysusername"
 #AUTH_PASSWORD="mypassword"
 
-#token auth
+#token authentication (the following token is passed to the X-Auth-Token header)
 #AUTH_TOKEN="89qynase9ryxcidxkhdaxklmworx"
 
-#keystone-basic auth
-#AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
+#keystone-basic auth (username/password authentication with keystone)
+#AUTH_KEYSTONE_URI="http://mykeystoneurl.com/" #optional. If not specified it is automatically retreived from the server endpoint
 #AUTH_USERNAME="mysusername"
 #AUTH_PASSWORD="mypassword"
-#AUTH_KEYSTONE_TENANT='mytenant'
+#AUTH_KEYSTONE_TENANT='mytenant' #optional. If not specified and the user is registered to only one tentant, this tenant will be used
 
 #keystone-voms auth
-#AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
-AUTH_KEYSTONE_CERT="$HOME/.globus/usercert.pem"
-AUTH_KEYSTONE_KEY="$HOME/.globus/userkey.pem"
-AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu"
-#AUTH_KEYSTONE_PROXY='/tmp/x509up_u500'
-#AUTH_KEYSTONE_TENANT='mytenant'
+#AUTH_KEYSTONE_URI="http://mykeystoneurl.com/" #optional. If not specified it is automatically retreived from the server endpoint
+#AUTH_KEYSTONE_CERT="$HOME/.globus/usercert.pem" #optional. If not specified, AUTH_KEYSTONE_PROXY is used insthead
+#AUTH_KEYSTONE_KEY="$HOME/.globus/userkey.pem"
+AUTH_KEYSTONE_PROXY='/tmp/x509up_u`id -u`' #valid proxy shall be generated. If not signed with VOMS, AUTH_KEYSTONE_VOMSEXT is required
+#AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu" #mandatory for AUTH_KEYSTONE_CERT. If not specified, AUTH_KEYSTONE_PROXY shall be already signed with VOMS
+#AUTH_KEYSTONE_TENANT='mytenant' #optional. If not specified, the tenant assigned to AUTH_KEYSTONE_VOMSEXT will be used
 
 #keystone-myproxy auth
-#AUTH_KEYSTONE_URI="http://mykeystoneurl.com/"
-#AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu"
-#AUTH_KEYSTONE_TENANT='mytenant'
-#AUTH_MYPROXY_URI='myproxy://myproxy.server'
-#AUTH_USERNAME="mysusername"
-#AUTH_PASSWORD="mypassword"
+#AUTH_KEYSTONE_URI="http://mykeystoneurl.com/" #optional. If not specified it is automatically retreived from the server endpoint
+#AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu" #mandatory
+#AUTH_KEYSTONE_TENANT='mytenant' #optional. If not specified, the tenant assigned to AUTH_KEYSTONE_VOMSEXT will be used
+#AUTH_MYPROXY_SERVER='myproxy.server.address.com:7512' #Myproxy server address: <server host>[:<server port>]. Port is optional.
+#AUTH_USERNAME="myusername"
+#AUTH_PASSWORD="mypassword" #optional. If not specified, password is requested to the user

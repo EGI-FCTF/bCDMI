@@ -108,7 +108,7 @@ if [[ -n "$_LOCAL_AUTH" && -e "$_LOCAL_AUTH" ]]; then
   source "$_LOCAL_AUTH"
   #If present, not expired and related to the same endpoint, load token cache file infomration
   _LOCAL_AUTH_CACHE="${_LOCAL_AUTH}.cache"
-  if [[ -n "$_LOCAL_AUTH" && -e "$_LOCAL_AUTH" ]]; then
+  if [[ -e "$_LOCAL_AUTH_CACHE" ]]; then
     CACHE_EXPIRE_TIME="`sed -n 's/^CACHE_EXPIRE_TIME="\\(.*\\)"/\1/p' $_LOCAL_AUTH_CACHE`"
     CACHE_RELATED_ENDPOINT="`sed -n 's/^CACHE_RELATED_ENDPOINT="\\(.*\\)"/\1/p' $_LOCAL_AUTH_CACHE`"
     if [[ -n "$CACHE_EXPIRE_TIME" && `date +%s` -lt `date -d "$CACHE_EXPIRE_TIME" +%s` && "$CACHE_RELATED_ENDPOINT" == "$_ENDPOINT" ]]; then
@@ -140,7 +140,7 @@ elif [[ "$AUTH_TYPE" == "keystone-basic" ]]; then
     $_DEBUG && echo "[DEBUG] no valid token found, creating a new one." >&2
     error 127 "Not jet implemented"
   fi
-elif [[ "$AUTH_TYPE" == "keystone-voms" ]]; then
+elif [[ "$AUTH_TYPE" == "keystone-voms" || "$AUTH_TYPE" == "keystone-myproxy" ]]; then
   #Keystone authentication (with VOMS proxy certificate)
   $_DEBUG && echo "[DEBUG] using keystone (VOMS) authentication" >&2
 
@@ -180,34 +180,71 @@ elif [[ "$AUTH_TYPE" == "keystone-voms" ]]; then
       [[ $? -ne 0 ]] && error 192 "Specified proxy certificate is not valid anymore. Please generate a new proxy or specify the user certificate."
 
       #Check the proxy VO extensions validity (if specified)
-      if [[ "$VONAME" != "$AUTH_KEYSTONE_VOMSEXT" ]]; then
+      if [[ -n "$AUTH_KEYSTONE_VOMSEXT" && "$VONAME" != "$AUTH_KEYSTONE_VOMSEXT" ]]; then
         #No valid VOMS extensions provided with the proxy, re-create a new proxy
         $_DEBUG && echo "[DEBUG] No valid VOMS extensions provided in the proxy. Create a new temporary proxy for autentication." >&2
 
-        TMP_OPTS="-rfc -dont-verify-ac"
+        TMP_OPTS="-rfc -n"
         [[ -n "$X509_VOMSES" ]] && TMP_OPTS="$TMP_OPTS -vomses $X509_VOMSES"
-        voms-proxy-init -cert "$AUTH_KEYSTONE_PROXY" -key "$AUTH_KEYSTONE_PROXY" -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY.vomsext" $TMP_OPTS -debug #&>/dev/null 
+        export X509_USER_PROXY="$AUTH_KEYSTONE_PROXY"
+        voms-proxy-init -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY.vomsext" $TMP_OPTS &>/dev/null
         if [[ $? -ne 0 ]]; then
           rm -f "$AUTH_KEYSTONE_PROXY.vomsext"
+          voms-proxy-init -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY.vomsext" $TMP_OPTS -debug
           error 192 "Failed to generate temporary user proxy."
         fi
         AUTH_KEYSTONE_PROXY=$AUTH_KEYSTONE_PROXY.vomsext
+        export X509_USER_PROXY=
       fi
     elif [[ -n "$AUTH_KEYSTONE_CERT" && -n "$AUTH_KEYSTONE_KEY" && -n "$AUTH_KEYSTONE_VOMSEXT" ]]; then
       $_DEBUG && echo "[DEBUG] generating temporary proxy." >&2
       AUTH_KEYSTONE_PROXY="$0.tempproxy"
 
       #Generate a proxy from the certificate (with VOMS extensions)
-      voms-proxy-init -cert "$AUTH_KEYSTONE_CERT" -key "$AUTH_KEYSTONE_KEY" -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY" -rfc -dont-verify-ac &>/dev/null
+      TMP_OPTS="-rfc"
+      [[ -n "$X509_VOMSES" ]] && TMP_OPTS="$TMP_OPTS -vomses $X509_VOMSES"
+      voms-proxy-init -cert "$AUTH_KEYSTONE_CERT" -key "$AUTH_KEYSTONE_KEY" -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY" $TMP_OPTS &>/dev/null
       if [[ $? -ne 0 ]]; then
 	voms-proxy-info -file "$AUTH_KEYSTONE_PROXY" -exists
         if [[ $? -ne 0 ]]; then
 	  rm -f "$AUTH_KEYSTONE_PROXY"
+          voms-proxy-init -cert "$AUTH_KEYSTONE_CERT" -key "$AUTH_KEYSTONE_KEY" -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY" $TMP_OPTS -debug
 	  error 192 "Failed to generate temporary user proxy."
 	fi
-      else
-        error 193 "No authorization proxy specified. Please define one or a client certificate"
       fi
+    elif [[ -n "$AUTH_MYPROXY_SERVER" && -n "$AUTH_USERNAME" && -n "$AUTH_KEYSTONE_VOMSEXT" ]]; then
+      $_DEBUG && echo "[DEBUG] generating temporary proxy from myproxy." >&2
+      AUTH_KEYSTONE_PROXY="$0.tempproxy"
+
+      #Generate a proxy from the myproxy (with VOMS extensions)
+      AUTH_MYPROXY_SERVER="-s ${AUTH_MYPROXY_SERVER/:/ -p }"
+      if [[ -n "$AUTH_PASSWORD" ]]; then
+        echo "$AUTH_PASSWORD" | myproxy-logon -S $AUTH_MYPROXY_SERVER -l $AUTH_USERNAME -o "${AUTH_KEYSTONE_PROXY}m" > /dev/null
+        res="${PIPESTATUS[1]}"
+      else
+        myproxy-logon $AUTH_MYPROXY_SERVER -l $AUTH_USERNAME -o "${AUTH_KEYSTONE_PROXY}m"
+        res=$?
+      fi
+      if [[ $res -ne 0 ]]; then
+        error 193 "Failed to get proxy from myproxy. Are credentials wrong?"
+      fi
+
+      #Sign the proxy with VOMS extensions
+      TMP_OPTS="-rfc -n"
+      [[ -n "$X509_VOMSES" ]] && TMP_OPTS="$TMP_OPTS -vomses $X509_VOMSES"
+      export X509_USER_PROXY="${AUTH_KEYSTONE_PROXY}m"
+      voms-proxy-init -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY" $TMP_OPTS &>/dev/null
+      if [[ $? -ne 0 ]]; then
+        voms-proxy-info -file "$AUTH_KEYSTONE_PROXY" -exists
+        if [[ $? -ne 0 ]]; then
+          rm -f "$AUTH_KEYSTONE_PROXY"
+          voms-proxy-init -voms "$AUTH_KEYSTONE_VOMSEXT" -out "$AUTH_KEYSTONE_PROXY" $TMP_OPTS -debug
+          error 192 "Failed to sign temporary user proxy."
+        fi
+      fi
+      rm -f "${AUTH_KEYSTONE_PROXY}m"
+      export X509_USER_PROXY=
+
     else
       error 194 "Please setup a proxy or certificate for Keystone authentication and VOMS extension in the bcdmi.auth file"
     fi
@@ -229,7 +266,7 @@ elif [[ "$AUTH_TYPE" == "keystone-voms" ]]; then
       $_DEBUG && echo "[DEBUG] tenant name not specified. getting unscoped token" >&2
       TMPSTR="`curl $_CURL_OPTS -s -S -X POST "$AUTH_KEYSTONE_URI/tokens" -H 'Accept: application/json' -H 'Content-Type: application/json' -d '{"auth":{"voms":true}}' --cert "$AUTH_KEYSTONE_PROXY" --key "$AUTH_KEYSTONE_PROXY" --cacert "$AUTH_KEYSTONE_PROXY" | gawk 'BEGIN{RS="\\""}{if ($0=="expires") {getline;getline;gsub("T"," ",$0);gsub("Z","",$0);printf $0","}if($0=="id"){getline;getline;printf $0;exit}}'`"
       AUTH_TOKEN="${TMPSTR#*,}"
-      [[ -z "$AUTH_TOKEN" ]] && error 201 "failed to get unscoped token"
+      [[ -z "$AUTH_TOKEN" ]] && error 201 "failed to get unscoped token. Are you sure your certificate VOMS extension can access the service?"
       AUTH="X-Auth-Token: $AUTH_TOKEN"
 
       #get default tenant name
@@ -316,10 +353,10 @@ if [[ "$_ACTION" == "auth" ]]; then
   #Only display auth information (and tenants list)
   echo "Auth type: $AUTH_TYPE"
   echo "User auth header: ${AUTH#-H }"
-  if [[ "$AUTH_TYPE" == "keystone-voms" || "$AUTH_TYPE" == "keystone-basic" ]]; then
+  if [[ "$AUTH_TYPE" == "keystone-voms" || "$AUTH_TYPE" == "keystone-basic" || "$AUTH_TYPE" == "keystone-myproxy" ]]; then
     [[ -n "$AUTH_KEYSTONE_URI" ]] && echo "Keystone URI: $AUTH_KEYSTONE_URI" || echo "Keystone URI: (none)"
     [[ -n "$AUTH_KEYSTONE_TENANT" ]] && echo "Tenant associated: $AUTH_KEYSTONE_TENANT" || echo "Tenant associated: (none)"
-    [[ -n "$AUTH_KEYSTONE_TENANT" && -n "$AUTH_TOKEN_PATH" && -n "$_ENDPOINT" ]] && echo "Tenant associated endpoint: $_ENDPOINT$AUTH_TOKEN_PATH" || echo "Tenant associated endpoint: (none)"
+    [[ -n "$AUTH_KEYSTONE_TENANT" && -n "$_ENDPOINT" ]] && echo "Tenant associated endpoint: $_ENDPOINT" || echo "Tenant associated endpoint: (none)"
     if [[ -n "$AUTH_KEYSTONE_URI" ]]; then
       echo "Tenants list:"
       echo "tenant name,tenant id,tenant description"
