@@ -13,6 +13,7 @@ and the following CDMI operations:
  * auth        - Display auth information (for integration with other services)
  * list        - List contents of the container [default action]
  * stat        - Get info for the file (as CDMI metadata)
+ * publicurl   - Retreive object public url (for sharing the file when public data access is enabled)
  * get         - Download file
  * put         - Upload a file (needs -T switch in the arguments)
  * post        - Update metadata (ex. file ACL, see post command options for the full metadata list)
