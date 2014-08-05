@@ -44,6 +44,7 @@ Usage:
   auth        Display auth information (for integration with other services)
   list        List contents of the container [default action]
   stat        Get info for the file (as CDMI metadata)
+  publicurl   Retreive object public url (for public data access)
   get         Download file
   put         Upload a file (needs -T switch in the arguments)
   post        Update metadata (see post command options for the metadata list)

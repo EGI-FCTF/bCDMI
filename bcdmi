@@ -1,5 +1,5 @@
 #!/bin/bash
-#CDMI Tools (v0.2) by Salvatore Pinto - 04.06.2013
+#CDMI Tools (v0.3) by Salvatore Pinto - 05.08.2013
 
 function usage {
   echo "Usage:
@@ -11,6 +11,7 @@ function usage {
   auth        Display auth information (for integration with other services)
   list        List contents of the container [default action]
   stat        Get info for the file (as CDMI metadata)
+  publicurl   Retreive object public url (for public data access)
   get         Download file
   put         Upload a file (needs -T switch in the arguments)
   post        Update metadata (see post command options for the metadata list)
@@ -374,6 +375,8 @@ elif [[ "$_ACTION" == "put" ]]; then
   curl -k "$_ENDPOINT" -H "$AUTH" -H 'Content-Type: application/binary' -T "$_FILE_TO_UPLOAD"
 elif [[ "$_ACTION" == "stat" ]]; then
   curl -k -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
+elif [[ "$_ACTION" == "publicurl" ]]; then
+  echo "$_ENDPOINT"
 elif [[ "$_ACTION" == "delete" ]]; then
   if $_RECURSIVE; then
     if [[ "${_ENDPOINT%/}" == "$_ENDPOINT" ]]; then

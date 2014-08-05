@@ -4,9 +4,10 @@ Version 0.3:
  * Added automatic retreival of API endpoints from keystone (if specified)
  * Added -k switch and set as default validating HTTPs certificates
  * Added keystone-myproxy authorization
+ * Added public URL retreival option
  * Separated retreived token and other cached information from main auth configuration file
  * Updated to work with both voms 3.x and VOMS 2.x clients
- * Updated docuementation
+ * Updated documentation
  * Minor bugfixes
 
 Version 0.2:
