@@ -23,7 +23,7 @@ AUTH_TYPE='keystone-voms'
 #AUTH_KEYSTONE_URI="http://mykeystoneurl.com/" #optional. If not specified it is automatically retreived from the server endpoint
 #AUTH_KEYSTONE_CERT="$HOME/.globus/usercert.pem" #optional. If not specified, AUTH_KEYSTONE_PROXY is used insthead
 #AUTH_KEYSTONE_KEY="$HOME/.globus/userkey.pem"
-AUTH_KEYSTONE_PROXY='/tmp/x509up_u`id -u`' #valid proxy shall be generated. If not signed with VOMS, AUTH_KEYSTONE_VOMSEXT is required
+AUTH_KEYSTONE_PROXY="/tmp/x509up_u`id -u`" #valid proxy shall be generated. If not signed with VOMS, AUTH_KEYSTONE_VOMSEXT is required
 #AUTH_KEYSTONE_VOMSEXT="fedcloud.egi.eu" #mandatory for AUTH_KEYSTONE_CERT. If not specified, AUTH_KEYSTONE_PROXY shall be already signed with VOMS
 #AUTH_KEYSTONE_TENANT='mytenant' #optional. If not specified, the tenant assigned to AUTH_KEYSTONE_VOMSEXT will be used
 
