@@ -26,7 +26,7 @@ Generic options:
   --cdmi-version <version>  Version of the CDMI standard to use (default $_CDMI_VERSION)
   --crl-update              Update CRL before creating a new proxy. Recommended if fetch-crl is not enabled in the cron (ex. on Windows machines)
   --ca-path <path>          Use the following CA path for HTTPs certificates verification (default to /etc/grid-security/certificates if present)
-  -k | --insecure           Do not verify HTTPs certificate in the API calls (not recommended)          
+  -k | --insecure           Do not verify HTTPs certificate in the API calls (not recommended)
 
 put command:
  -T | --upload-file <file>  File to upload [mandatory]
@@ -361,44 +361,44 @@ if [[ "$_ACTION" == "auth" ]]; then
     if [[ -n "$AUTH_KEYSTONE_URI" ]]; then
       echo "Tenants list:"
       echo "tenant name,tenant id,tenant description"
-      curl -s -S -k "$AUTH_KEYSTONE_URI/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk 'BEGIN{RS="\""}{if($0=="name"){getline;getline;tmn=$0;}if($0=="id"){getline;getline;tmid=$0;}if($0=="description"){getline;getline;tmd=$0;}if((tmn!="")&&(tmid!="")&&(tmd!="")){print tmn","tmid","tmd;tmn="";tmid="";tmd=""}}'
+      curl $_CURL_OPTS -s -S "$AUTH_KEYSTONE_URI/tenants" -H "$AUTH" -H 'Accept: application/json' -H 'Content-Type: application/json' | gawk 'BEGIN{RS="\""}{if($0=="name"){getline;getline;tmn=$0;}if($0=="id"){getline;getline;tmid=$0;}if($0=="description"){getline;getline;tmd=$0;}if((tmn!="")&&(tmid!="")&&(tmd!="")){print tmn","tmid","tmd;tmn="";tmid="";tmd=""}}'
     fi
   fi
 elif [[ -z "$_ACTION" || "$_ACTION" == "list" ]]; then
   #List contents of the container
-  curl -k -s -S "$_ENDPOINT" -H "$AUTH" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" | gawk 'BEGIN{RS="\""}{if($0=="children"){while($0!~"]|}"){getline;if($0~"]|}")break;getline;gsub(/ /,"%20",$0);print $0}}}'
+  curl $_CURL_OPTS -s -S "$_ENDPOINT" -H "$AUTH" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" | gawk 'BEGIN{RS="\""}{if($0=="children"){while($0!~"]|}"){getline;if($0~"]|}")break;getline;gsub(/ /,"%20",$0);print $0}}}'
 elif [[ "$_ACTION" == "get" ]]; then
   #Get content of the file
-  curl -k -s -S "$_ENDPOINT" -H "$AUTH"
+  curl $_CURL_OPTS -s -S "$_ENDPOINT" -H "$AUTH"
 elif [[ "$_ACTION" == "put" ]]; then
   [[ -z "$_FILE_TO_UPLOAD" ]] && error 243 "You need to specify a file to upload."
-  curl -k "$_ENDPOINT" -H "$AUTH" -H 'Content-Type: application/binary' -T "$_FILE_TO_UPLOAD"
+  curl $_CURL_OPTS "$_ENDPOINT" -H "$AUTH" -H 'Content-Type: application/binary' -T "$_FILE_TO_UPLOAD"
 elif [[ "$_ACTION" == "stat" ]]; then
-  curl -k -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
+  curl $_CURL_OPTS -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
 elif [[ "$_ACTION" == "publicurl" ]]; then
   echo "$_ENDPOINT"
 elif [[ "$_ACTION" == "delete" ]]; then
   if $_RECURSIVE; then
     if [[ "${_ENDPOINT%/}" == "$_ENDPOINT" ]]; then
       #This is not a folder, delete the file
-      curl -k -s -S "$_ENDPOINT" -X DELETE -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
+      curl $_CURL_OPTS -s -S "$_ENDPOINT" -X DELETE -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
     else
       #This is a folder, list the contents and delete all the contents recursively
-      for f in `curl -k -s -S "$_ENDPOINT" -H "$AUTH" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" | gawk 'BEGIN{RS="\""}{if($0=="children"){while($0!~"]|}"){getline;if($0~"]|}")break;getline;gsub(/ /,"%20",$0);print $0}}}'`; do
+      for f in `curl $_CURL_OPTS -s -S "$_ENDPOINT" -H "$AUTH" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" | gawk 'BEGIN{RS="\""}{if($0=="children"){while($0!~"]|}"){getline;if($0~"]|}")break;getline;gsub(/ /,"%20",$0);print $0}}}'`; do
         if [[ "${f%/}" == "$f" ]]; then
-          curl -k -s -S "$_ENDPOINT$f" -X DELETE -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
+          curl $_CURL_OPTS -s -S "$_ENDPOINT$f" -X DELETE -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH"
         else
           $0 -r -e "$_ENDPOINT" delete $f
         fi
       done
       #Then delete the folder itself
-      curl -k -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -X DELETE -H "$AUTH"
+      curl $_CURL_OPTS -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -X DELETE -H "$AUTH"
     fi
   else
-    curl -k -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -X DELETE -H "$AUTH"
+    curl $_CURL_OPTS -s -S "$_ENDPOINT" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -X DELETE -H "$AUTH"
   fi
 elif [[ "$_ACTION" == "mkdir" ]]; then
-   curl -k -X PUT "${_ENDPOINT%/}/" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH" -H 'Content-Type: application/cdmi-container' -H 'Content-Length: 0'
+   curl $_CURL_OPTS -X PUT "${_ENDPOINT%/}/" -H "X-CDMI-Specification-Version: $_CDMI_VERSION" -H "$AUTH" -H 'Content-Type: application/cdmi-container' -H 'Content-Length: 0'
 elif [[ "$_ACTION" == "post" ]]; then
   #WARNING. This uses SWIFT API, because there is still no CDMI ACL implementation in SWIFT
   _ENDPOINT="${_ENDPOINT/\/cdmi\///v1/}" #switch to SWIFT API
@@ -412,7 +412,7 @@ elif [[ "$_ACTION" == "post" ]]; then
       weblist) META_CODE="X-Container-Meta-Web-Listings" ;;
       *) error 125 "Metadata code $META_CODE not valid"
     esac
-    curl -k -s -S "$_ENDPOINT" -X POST -H "$AUTH" -H "$META_CODE: $META_VALUE" -H 'Accept-Encoding: identity'
+    curl $_CURL_OPTS -s -S "$_ENDPOINT" -X POST -H "$AUTH" -H "$META_CODE: $META_VALUE" -H 'Accept-Encoding: identity'
   done
 else
   error 150 "Action $_ACTION is not recognized."
